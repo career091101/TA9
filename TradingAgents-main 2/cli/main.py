@@ -18,6 +18,7 @@ import time
 from rich.tree import Tree
 from rich import box
 from rich.align import Align
+from tradingagents.utils.message_utils import has_tool_calls
 from rich.rule import Rule
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -492,30 +493,6 @@ def get_user_selections():
     }
 
 
-def get_ticker():
-    """Get ticker symbol from user input."""
-    return typer.prompt("", default="SPY")
-
-
-def get_analysis_date():
-    """Get the analysis date from user input."""
-    while True:
-        date_str = typer.prompt(
-            "", default=datetime.datetime.now().strftime("%Y-%m-%d")
-        )
-        try:
-            # Validate date format and ensure it's not in the future
-            analysis_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-            if analysis_date.date() > datetime.datetime.now().date():
-                console.print("[red]Error: Analysis date cannot be in the future[/red]")
-                continue
-            return date_str
-        except ValueError:
-            console.print(
-                "[red]Error: Invalid date format. Please use YYYY-MM-DD[/red]"
-            )
-
-
 def display_complete_report(final_state):
     """Display the complete analysis report with team-based panels."""
     console.print("\n[bold green]Complete Analysis Report[/bold green]\n")
@@ -860,7 +837,7 @@ def run_analysis():
                 message_buffer.add_message(msg_type, content)                
 
                 # If it's a tool call, add it to tool calls
-                if hasattr(last_message, "tool_calls"):
+                if has_tool_calls(last_message):
                     for tool_call in last_message.tool_calls:
                         # Handle both dictionary and object tool calls
                         if isinstance(tool_call, dict):

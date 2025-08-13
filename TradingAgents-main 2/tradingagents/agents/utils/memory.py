@@ -69,7 +69,8 @@ class FinancialSituationMemory:
 
 if __name__ == "__main__":
     # Example usage
-    matcher = FinancialSituationMemory()
+    from tradingagents.default_config import DEFAULT_CONFIG
+    matcher = FinancialSituationMemory("test_memory", DEFAULT_CONFIG)
 
     # Example data
     example_data = [

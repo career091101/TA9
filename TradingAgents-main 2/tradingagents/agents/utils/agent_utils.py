@@ -1,5 +1,5 @@
 from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage, AIMessage
-from typing import List
+from typing import List, Dict, Any, Callable, Optional
 from typing import Annotated
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import RemoveMessage
@@ -9,19 +9,21 @@ import functools
 import pandas as pd
 import os
 from dateutil.relativedelta import relativedelta
+from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 import tradingagents.dataflows.interface as interface
 from tradingagents.default_config import DEFAULT_CONFIG
 from langchain_core.messages import HumanMessage
+from tradingagents.agents.utils.agent_states import AgentState
 
 
-def create_msg_delete():
-    def delete_messages(state):
+def create_msg_delete() -> Callable[[AgentState], Dict[str, Any]]:
+    def delete_messages(state: AgentState) -> Dict[str, Any]:
         """Clear messages and add placeholder for Anthropic compatibility"""
         messages = state["messages"]
         
-        # Remove all messages
-        removal_operations = [RemoveMessage(id=m.id) for m in messages]
+        # Remove all messages (skip messages without id)
+        removal_operations = [RemoveMessage(id=m.id) for m in messages if m.id is not None]
         
         # Add a minimal placeholder message
         placeholder = HumanMessage(content="Continue")
@@ -32,19 +34,19 @@ def create_msg_delete():
 
 
 class Toolkit:
-    _config = DEFAULT_CONFIG.copy()
+    _config: Dict[str, Any] = DEFAULT_CONFIG.copy()
 
     @classmethod
-    def update_config(cls, config):
+    def update_config(cls, config: Dict[str, Any]) -> None:
         """Update the class-level configuration."""
         cls._config.update(config)
 
     @property
-    def config(self):
+    def config(self) -> Dict[str, Any]:
         """Access the configuration."""
         return self._config
 
-    def __init__(self, config=None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         if config:
             self.update_config(config)
 
@@ -87,9 +89,9 @@ class Toolkit:
 
         end_date_str = end_date
 
-        end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        look_back_days = (end_date - start_date).days
+        end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        look_back_days = (end_date_dt - start_date_dt).days
 
         finnhub_news_result = interface.get_finnhub_news(
             ticker, end_date_str, look_back_days
@@ -138,7 +140,7 @@ class Toolkit:
 
         result_data = interface.get_YFin_data(symbol, start_date, end_date)
 
-        return result_data
+        return str(result_data)
 
     @staticmethod
     @tool

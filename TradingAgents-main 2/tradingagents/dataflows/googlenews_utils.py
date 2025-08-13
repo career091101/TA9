@@ -11,6 +11,8 @@ from tenacity import (
     retry_if_exception_type,
     retry_if_result,
 )
+# Import type-safe date utilities
+from ..utils.date_utils import parse_date, format_date
 
 
 def is_rate_limited(response):
@@ -39,11 +41,11 @@ def getNewsData(query, start_date, end_date):
     end_date: str - end date in the format yyyy-mm-dd or mm/dd/yyyy
     """
     if "-" in start_date:
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        start_date = start_date.strftime("%m/%d/%Y")
+        start_date_dt = parse_date(start_date)
+        start_date = format_date(start_date_dt, "%m/%d/%Y")
     if "-" in end_date:
-        end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        end_date = end_date.strftime("%m/%d/%Y")
+        end_date_dt = parse_date(end_date)
+        end_date = format_date(end_date_dt, "%m/%d/%Y")
 
     headers = {
         "User-Agent": (

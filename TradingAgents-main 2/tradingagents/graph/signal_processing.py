@@ -1,12 +1,18 @@
 # TradingAgents/graph/signal_processing.py
 
+from typing import Union
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+# 統一されたLLM型定義
+LLMType = Union[ChatOpenAI, ChatAnthropic, ChatGoogleGenerativeAI]
 
 
 class SignalProcessor:
     """Processes trading signals to extract actionable decisions."""
 
-    def __init__(self, quick_thinking_llm: ChatOpenAI):
+    def __init__(self, quick_thinking_llm: LLMType):
         """Initialize with an LLM for processing."""
         self.quick_thinking_llm = quick_thinking_llm
 
@@ -28,4 +34,9 @@ class SignalProcessor:
             ("human", full_signal),
         ]
 
-        return self.quick_thinking_llm.invoke(messages).content
+        response = self.quick_thinking_llm.invoke(messages)
+        # Ensure we return a string
+        if hasattr(response, 'content'):
+            content = response.content
+            return content if isinstance(content, str) else str(content)
+        return str(response)
