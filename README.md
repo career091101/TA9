@@ -41,7 +41,7 @@ TradingAgentsは、実世界のトレーディング会社のダイナミクス�
 ## 🚀 クイックスタート
 
 ### 前提条件
-- Python 3.10以上
+- Python 3.10以上（3.11推奨）
 - Conda（推奨）
 
 ### インストール
@@ -51,12 +51,13 @@ TradingAgentsは、実世界のトレーディング会社のダイナミクス�
 git clone https://github.com/career091101/TA9.git
 cd TA9
 
-# 仮想環境の作成
-conda create -n tradingagents python=3.13
+# 仮想環境の作成（3.11 推奨）
+conda create -n tradingagents python=3.11 -y
 conda activate tradingagents
 
-# 依存関係のインストール
-pip install -r requirements.txt
+# 依存関係のインストール（pip を先に更新）
+python -m pip install -U pip setuptools wheel
+python -m pip install -r "TradingAgents-main 2/requirements.txt"
 ```
 
 ### 環境変数の設定
@@ -75,12 +76,18 @@ export GOOGLE_API_KEY=$YOUR_GOOGLE_API_KEY
 
 #### CLIインターフェース（推奨）
 ```bash
+# 実行用ディレクトリへ移動
+cd "TradingAgents-main 2"
+
 # 対話型モードで起動
 python -m cli.main
 ```
 
 #### 直接実行
 ```bash
+# 実行用ディレクトリへ移動
+cd "TradingAgents-main 2"
+
 # カスタム設定で実行
 python main.py
 ```

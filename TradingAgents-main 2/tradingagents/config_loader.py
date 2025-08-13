@@ -2,11 +2,18 @@
 TradingAgentsプロジェクトの型安全な設定ローダー
 
 このモジュールは設定の読み込み、検証、環境変数の処理を提供します。
+.envファイルからの環境変数読み込みをサポートします。
 """
 
 import os
 from typing import Optional, Any
 from .config_types import TradingAgentsConfig, PartialConfig, LLMProviderType
+
+try:
+    from dotenv import load_dotenv
+    _DOTENV_AVAILABLE = True
+except ImportError:
+    _DOTENV_AVAILABLE = False
 
 
 def get_bool_env(key: str, default: bool) -> bool:
@@ -60,12 +67,68 @@ def get_str_env(key: str, default: str) -> str:
     return os.getenv(key, default)
 
 
+def load_env_file() -> None:
+    """環境変数ファイル(.env)を読み込む
+    
+    python-dotenvが利用可能な場合、プロジェクトルートの.envファイルを読み込みます。
+    """
+    if _DOTENV_AVAILABLE:
+        # プロジェクトルートの.envファイルを探す
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        env_file = os.path.join(project_root, ".env")
+        
+        if os.path.exists(env_file):
+            load_dotenv(env_file)
+            print(f"環境変数ファイルを読み込みました: {env_file}")
+        else:
+            print(f"環境変数ファイルが見つかりません: {env_file}")
+            print("APIキーは環境変数から直接読み込まれます。")
+    else:
+        print("警告: python-dotenvがインストールされていません。")
+        print("pip install python-dotenvでインストールしてください。")
+
+
+def validate_api_keys() -> dict[str, bool]:
+    """APIキーの存在を確認する
+    
+    Returns:
+        dict[str, bool]: 各APIキーの存在状況
+    """
+    api_keys = {
+        "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+        "FINNHUB_API_KEY": bool(os.getenv("FINNHUB_API_KEY")),
+        "ANTHROPIC_API_KEY": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "GOOGLE_API_KEY": bool(os.getenv("GOOGLE_API_KEY")),
+    }
+    
+    # 必須APIキーのチェック
+    missing_required = []
+    if not api_keys["OPENAI_API_KEY"]:
+        missing_required.append("OPENAI_API_KEY")
+    if not api_keys["FINNHUB_API_KEY"]:
+        missing_required.append("FINNHUB_API_KEY")
+    
+    if missing_required:
+        print(f"警告: 必須APIキーが設定されていません: {', '.join(missing_required)}")
+        print("プロジェクトルートに.envファイルを作成して設定してください。")
+        print(".env.exampleファイルを参考にしてください。")
+    
+    return api_keys
+
+
 def get_config_from_env() -> PartialConfig:
     """環境変数から設定を型安全に読み込む
     
     Returns:
         PartialConfig: 環境変数から読み込んだ設定
     """
+    # .envファイルを読み込み
+    load_env_file()
+    
+    # APIキーの確認
+    validate_api_keys()
+    
     config: PartialConfig = {}
     
     # パス設定
@@ -189,19 +252,21 @@ def validate_config(config: TradingAgentsConfig) -> TradingAgentsConfig:
     return config
 
 
-def load_config(override: Optional[PartialConfig] = None) -> TradingAgentsConfig:
+def load_config(override: Optional[PartialConfig] = None, validate_keys: bool = True) -> TradingAgentsConfig:
     """型安全な設定のロード
     
     デフォルト設定、環境変数、オーバーライドの順で設定を構築します。
+    .env ファイルの読み込みとAPIキーの検証も実行します。
     
     Args:
         override: オーバーライドする設定項目
+        validate_keys: APIキーの検証を実行するかどうか (デフォルト: True)
         
     Returns:
         TradingAgentsConfig: 完全な設定オブジェクト
         
     Raises:
-        ValueError: 設定値が不正な場合
+        ValueError: 設定値が不正な場合、または必須APIキーが不足している場合
         TypeError: 設定の型が不正な場合
     """
     # デフォルト設定
@@ -231,4 +296,12 @@ def load_config(override: Optional[PartialConfig] = None) -> TradingAgentsConfig
         config.update(override)  # type: ignore
     
     # 設定の検証
-    return validate_config(config)
+    validated_config = validate_config(config)
+    
+    # APIキーの検証（オプション）
+    if validate_keys:
+        from .api_keys import validate_api_keys
+        if not validate_api_keys():
+            raise ValueError("必須APIキーが設定されていません。.envファイルを確認してください。")
+    
+    return validated_config
