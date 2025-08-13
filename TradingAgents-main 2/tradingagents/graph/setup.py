@@ -1,7 +1,13 @@
 # TradingAgents/graph/setup.py
 
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.language_models import BaseChatModel
+
+# 統一されたLLM型定義
+LLMType = Union[ChatOpenAI, ChatAnthropic, ChatGoogleGenerativeAI]
 from langgraph.graph import END, StateGraph, START
 from langgraph.prebuilt import ToolNode
 
@@ -17,8 +23,8 @@ class GraphSetup:
 
     def __init__(
         self,
-        quick_thinking_llm: ChatOpenAI,
-        deep_thinking_llm: ChatOpenAI,
+        quick_thinking_llm: LLMType,
+        deep_thinking_llm: LLMType,
         toolkit: Toolkit,
         tool_nodes: Dict[str, ToolNode],
         bull_memory,

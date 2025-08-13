@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import time
 import json
+from tradingagents.utils.message_utils import get_tool_calls_safely
 
 
 def create_market_analyst(llm, toolkit):
@@ -78,7 +79,8 @@ Volume-Based Indicators:
 
         report = ""
 
-        if len(result.tool_calls) == 0:
+        tool_calls = get_tool_calls_safely(result)
+        if tool_calls is None or len(tool_calls) == 0:
             report = result.content
        
         return {

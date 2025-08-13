@@ -4,6 +4,9 @@ from stockstats import wrap
 from typing import Annotated
 import os
 from .config import get_config
+# Import type-safe date utilities
+from ..utils.date_utils import parse_date, format_date, ensure_string
+from datetime import datetime
 
 
 class StockstatsUtils:
@@ -41,13 +44,13 @@ class StockstatsUtils:
                 raise Exception("Stockstats fail: Yahoo Finance data not fetched yet!")
         else:
             # Get today's date as YYYY-mm-dd to add to cache
-            today_date = pd.Timestamp.today()
-            curr_date = pd.to_datetime(curr_date)
+            today_date_dt = datetime.now()
+            curr_date_dt = parse_date(curr_date)
 
-            end_date = today_date
-            start_date = today_date - pd.DateOffset(years=15)
-            start_date = start_date.strftime("%Y-%m-%d")
-            end_date = end_date.strftime("%Y-%m-%d")
+            end_date_dt = today_date_dt
+            start_date_dt = today_date_dt - pd.DateOffset(years=15)
+            start_date = format_date(start_date_dt)
+            end_date = format_date(end_date_dt)
 
             # Get config and ensure cache directory exists
             config = get_config()
@@ -70,12 +73,14 @@ class StockstatsUtils:
                     progress=False,
                     auto_adjust=True,
                 )
+                if data is None or data.empty:
+                    raise Exception(f"Failed to download data for symbol {symbol}")
                 data = data.reset_index()
                 data.to_csv(data_file, index=False)
 
             df = wrap(data)
             df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
-            curr_date = curr_date.strftime("%Y-%m-%d")
+            curr_date = ensure_string(curr_date_dt)
 
         df[indicator]  # trigger stockstats to calculate the indicator
         matching_rows = df[df["Date"].str.startswith(curr_date)]

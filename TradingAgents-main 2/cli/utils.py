@@ -1,7 +1,12 @@
 import questionary
+import sys
 from typing import List, Optional, Tuple, Dict
 
+from rich.console import Console
 from cli.models import AnalystType
+
+# Initialize Rich console for formatted output
+console = Console()
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -26,7 +31,7 @@ def get_ticker() -> str:
 
     if not ticker:
         console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
-        exit(1)
+        raise SystemExit(1)
 
     return ticker.strip().upper()
 
@@ -59,7 +64,7 @@ def get_analysis_date() -> str:
 
     if not date:
         console.print("\n[red]No date provided. Exiting...[/red]")
-        exit(1)
+        raise SystemExit(1)
 
     return date.strip()
 
@@ -85,7 +90,7 @@ def select_analysts() -> List[AnalystType]:
 
     if not choices:
         console.print("\n[red]No analysts selected. Exiting...[/red]")
-        exit(1)
+        raise SystemExit(1)
 
     return choices
 
@@ -117,12 +122,12 @@ def select_research_depth() -> int:
 
     if choice is None:
         console.print("\n[red]No research depth selected. Exiting...[/red]")
-        exit(1)
+        raise SystemExit(1)
 
     return choice
 
 
-def select_shallow_thinking_agent(provider) -> str:
+def select_shallow_thinking_agent(provider: str) -> str:
     """Select shallow thinking llm engine using an interactive selection."""
 
     # Define shallow thinking llm engine options with their corresponding model names
@@ -175,12 +180,12 @@ def select_shallow_thinking_agent(provider) -> str:
         console.print(
             "\n[red]No shallow thinking llm engine selected. Exiting...[/red]"
         )
-        exit(1)
+        raise SystemExit(1)
 
     return choice
 
 
-def select_deep_thinking_agent(provider) -> str:
+def select_deep_thinking_agent(provider: str) -> str:
     """Select deep thinking llm engine using an interactive selection."""
 
     # Define deep thinking llm engine options with their corresponding model names
@@ -235,11 +240,11 @@ def select_deep_thinking_agent(provider) -> str:
 
     if choice is None:
         console.print("\n[red]No deep thinking llm engine selected. Exiting...[/red]")
-        exit(1)
+        raise SystemExit(1)
 
     return choice
 
-def select_llm_provider() -> tuple[str, str]:
+def select_llm_provider() -> Tuple[str, str]:
     """Select the OpenAI api url using interactive selection."""
     # Define OpenAI api options with their corresponding endpoints
     BASE_URLS = [
@@ -268,7 +273,7 @@ def select_llm_provider() -> tuple[str, str]:
     
     if choice is None:
         console.print("\n[red]no OpenAI backend selected. Exiting...[/red]")
-        exit(1)
+        raise SystemExit(1)
     
     display_name, url = choice
     print(f"You selected: {display_name}\tURL: {url}")

@@ -4,16 +4,21 @@ import os
 from pathlib import Path
 import json
 from datetime import date
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List, Optional, Union
 
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.language_models import BaseChatModel
+
+# 統一されたLLM型定義
+LLMType = Union[ChatOpenAI, ChatAnthropic, ChatGoogleGenerativeAI]
 
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.config_types import TradingAgentsConfig, PartialConfig
 from tradingagents.agents.utils.memory import FinancialSituationMemory
 from tradingagents.agents.utils.agent_states import (
     AgentState,
@@ -36,14 +41,14 @@ class TradingAgentsGraph:
         self,
         selected_analysts=["market", "social", "news", "fundamentals"],
         debug=False,
-        config: Dict[str, Any] = None,
+        config: Union[Dict[str, Any], TradingAgentsConfig, None] = None,
     ):
         """Initialize the trading agents graph and components.
 
         Args:
             selected_analysts: List of analyst types to include
             debug: Whether to run in debug mode
-            config: Configuration dictionary. If None, uses default config
+            config: Configuration object or dictionary. If None, uses default config
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
@@ -57,20 +62,41 @@ class TradingAgentsGraph:
             exist_ok=True,
         )
 
-        # Initialize LLMs
+        # Initialize LLMs with proper typing
+        self.deep_thinking_llm: LLMType
+        self.quick_thinking_llm: LLMType
+        
         if self.config["llm_provider"].lower() == "openai" or self.config["llm_provider"] == "ollama" or self.config["llm_provider"] == "openrouter":
             self.deep_thinking_llm = ChatOpenAI(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
             self.quick_thinking_llm = ChatOpenAI(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
         elif self.config["llm_provider"].lower() == "anthropic":
-            self.deep_thinking_llm = ChatAnthropic(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatAnthropic(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
+            self.deep_thinking_llm = ChatAnthropic(
+                model_name=self.config["deep_think_llm"],
+                timeout=60.0,
+                stop=None
+            )
+            self.quick_thinking_llm = ChatAnthropic(
+                model_name=self.config["quick_think_llm"],
+                timeout=60.0,
+                stop=None
+            )
         elif self.config["llm_provider"].lower() == "google":
             self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
             self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
         
-        self.toolkit = Toolkit(config=self.config)
+        # Convert config to Dict if it's TradingAgentsConfig
+        config_dict: Optional[Dict[str, Any]]
+        if isinstance(self.config, dict):
+            config_dict = self.config  # type: ignore
+        elif hasattr(self.config, 'model_dump'):
+            config_dict = self.config.model_dump()
+        elif hasattr(self.config, '__dict__'):
+            config_dict = dict(self.config.__dict__)
+        else:
+            config_dict = None
+        self.toolkit = Toolkit(config=config_dict)
 
         # Initialize memories
         self.bull_memory = FinancialSituationMemory("bull_memory", self.config)
@@ -104,7 +130,7 @@ class TradingAgentsGraph:
         # State tracking
         self.curr_state = None
         self.ticker = None
-        self.log_states_dict = {}  # date to full state dict
+        self.log_states_dict: Dict[str, Dict[str, Any]] = {}  # date to full state dict
 
         # Set up the graph
         self.graph = self.graph_setup.setup_graph(selected_analysts)

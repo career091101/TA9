@@ -1,14 +1,10 @@
-from typing import Annotated, Sequence
-from datetime import date, timedelta, datetime
-from typing_extensions import TypedDict, Optional
-from langchain_openai import ChatOpenAI
-from tradingagents.agents import *
-from langgraph.prebuilt import ToolNode
-from langgraph.graph import END, StateGraph, START, MessagesState
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import MessagesState
 
 
 # Researcher team state
-class InvestDebateState(TypedDict):
+class InvestDebateState(TypedDict, total=False):
     bull_history: Annotated[
         str, "Bullish Conversation history"
     ]  # Bullish Conversation history
@@ -22,7 +18,7 @@ class InvestDebateState(TypedDict):
 
 
 # Risk management team state
-class RiskDebateState(TypedDict):
+class RiskDebateState(TypedDict, total=False):
     risky_history: Annotated[
         str, "Risky Agent's Conversation history"
     ]  # Conversation history
@@ -47,7 +43,7 @@ class RiskDebateState(TypedDict):
     count: Annotated[int, "Length of the current conversation"]  # Conversation length
 
 
-class AgentState(MessagesState):
+class AgentState(MessagesState, total=False):
     company_of_interest: Annotated[str, "Company that we are interested in trading"]
     trade_date: Annotated[str, "What date we are trading at"]
 

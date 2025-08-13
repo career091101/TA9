@@ -1,6 +1,7 @@
 # TradingAgents/graph/conditional_logic.py
 
 from tradingagents.agents.utils.agent_states import AgentState
+from tradingagents.utils.message_utils import safe_tool_calls_check
 
 
 class ConditionalLogic:
@@ -15,7 +16,7 @@ class ConditionalLogic:
         """Determine if market analysis should continue."""
         messages = state["messages"]
         last_message = messages[-1]
-        if last_message.tool_calls:
+        if safe_tool_calls_check(last_message):
             return "tools_market"
         return "Msg Clear Market"
 
@@ -23,7 +24,7 @@ class ConditionalLogic:
         """Determine if social media analysis should continue."""
         messages = state["messages"]
         last_message = messages[-1]
-        if last_message.tool_calls:
+        if safe_tool_calls_check(last_message):
             return "tools_social"
         return "Msg Clear Social"
 
@@ -31,7 +32,7 @@ class ConditionalLogic:
         """Determine if news analysis should continue."""
         messages = state["messages"]
         last_message = messages[-1]
-        if last_message.tool_calls:
+        if safe_tool_calls_check(last_message):
             return "tools_news"
         return "Msg Clear News"
 
@@ -39,7 +40,7 @@ class ConditionalLogic:
         """Determine if fundamentals analysis should continue."""
         messages = state["messages"]
         last_message = messages[-1]
-        if last_message.tool_calls:
+        if safe_tool_calls_check(last_message):
             return "tools_fundamentals"
         return "Msg Clear Fundamentals"
 

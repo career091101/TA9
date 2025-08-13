@@ -3,9 +3,11 @@ import time
 import json
 from datetime import datetime, timedelta
 from contextlib import contextmanager
-from typing import Annotated
+from typing import Annotated, Optional
 import os
 import re
+# Import type-safe date utilities
+from ..utils.date_utils import format_date
 
 ticker_to_company = {
     "AAPL": "Apple",
@@ -55,7 +57,7 @@ def fetch_top_from_category(
     ],
     date: Annotated[str, "Date to fetch top posts from."],
     max_limit: Annotated[int, "Maximum number of posts to fetch."],
-    query: Annotated[str, "Optional query to search for in the subreddit."] = None,
+    query: Annotated[Optional[str], "Optional query to search for in the subreddit."] = None,
     data_path: Annotated[
         str,
         "Path to the data folder. Default is 'reddit_data'.",
@@ -90,9 +92,8 @@ def fetch_top_from_category(
                 parsed_line = json.loads(line)
 
                 # select only lines that are from the date
-                post_date = datetime.utcfromtimestamp(
-                    parsed_line["created_utc"]
-                ).strftime("%Y-%m-%d")
+                post_date_dt = datetime.utcfromtimestamp(parsed_line["created_utc"])
+                post_date = format_date(post_date_dt)
                 if post_date != date:
                     continue
 

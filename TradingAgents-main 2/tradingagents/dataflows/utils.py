@@ -2,9 +2,9 @@ import os
 import json
 import pandas as pd
 from datetime import date, timedelta, datetime
-from typing import Annotated
+from typing import Annotated, Optional
 
-SavePathType = Annotated[str, "File path to save data. If None, data is not saved."]
+SavePathType = Annotated[Optional[str], "File path to save data. If None, data is not saved."]
 
 def save_output(data: pd.DataFrame, tag: str, save_path: SavePathType = None) -> None:
     if save_path:

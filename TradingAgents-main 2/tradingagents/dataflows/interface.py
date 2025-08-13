@@ -1,4 +1,4 @@
-from typing import Annotated, Dict
+from typing import Annotated, Dict, Optional, Union, Protocol, Any, List, TypeGuard
 from .reddit_utils import fetch_top_from_category
 from .yfin_utils import *
 from .stockstats_utils import *
@@ -10,10 +10,42 @@ from datetime import datetime
 import json
 import os
 import pandas as pd
-from tqdm import tqdm
-import yfinance as yf
+from tqdm import tqdm  # type: ignore
+import yfinance as yf  # type: ignore
 from openai import OpenAI
-from .config import get_config, set_config, DATA_DIR
+from .config import get_config, set_config, get_data_dir
+# Import type-safe date utilities
+from ..utils.date_utils import parse_date, format_date, ensure_datetime, ensure_string, subtract_days  # type: ignore
+
+# Type definitions for external API responses
+class OpenAIResponseProtocol(Protocol):
+    """Protocol for OpenAI API response objects."""
+    output: Any
+    content: Any
+
+class DataFrameProtocol(Protocol):
+    """Protocol for pandas DataFrame-like objects."""
+    def to_string(self) -> str: ...
+    def to_csv(self) -> str: ...
+    def __len__(self) -> int: ...
+    def empty(self) -> bool: ...
+
+# Type guards for safe Union handling
+def is_valid_string(value: Any) -> TypeGuard[str]:
+    """Type guard to check if value is a non-empty string."""
+    return isinstance(value, str) and len(value.strip()) > 0
+
+def is_valid_data_dir(data_dir: Any) -> TypeGuard[str]:
+    """Type guard to ensure data directory is valid."""
+    return is_valid_string(data_dir)
+
+def safe_path_join(*args: Union[str, None]) -> str:
+    """Safely join path components, handling None values."""
+    valid_parts: List[str] = []
+    for arg in args:
+        if is_valid_string(arg):
+            valid_parts.append(arg)
+    return os.path.join(*valid_parts) if valid_parts else ""
 
 
 def get_finnhub_news(
@@ -36,11 +68,12 @@ def get_finnhub_news(
 
     """
 
-    start_date = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
+    before_dt = subtract_days(curr_date_dt, look_back_days)
+    before = format_date(before_dt)
 
-    result = get_data_in_range(ticker, before, curr_date, "news_data", DATA_DIR)
+    data_dir = get_data_dir()
+    result = get_data_in_range(ticker, before, curr_date, "news_data", data_dir)
 
     if len(result) == 0:
         return ""
@@ -75,11 +108,12 @@ def get_finnhub_company_insider_sentiment(
         str: a report of the sentiment in the past 15 days starting at curr_date
     """
 
-    date_obj = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = date_obj - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
+    before_dt = subtract_days(curr_date_dt, look_back_days)
+    before = format_date(before_dt)
 
-    data = get_data_in_range(ticker, before, curr_date, "insider_senti", DATA_DIR)
+    data_dir = get_data_dir()
+    data = get_data_in_range(ticker, before, curr_date, "insider_senti", data_dir)
 
     if len(data) == 0:
         return ""
@@ -116,11 +150,12 @@ def get_finnhub_company_insider_transactions(
         str: a report of the company's insider transaction/trading informtaion in the past 15 days
     """
 
-    date_obj = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = date_obj - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
+    before_dt = subtract_days(curr_date_dt, look_back_days)
+    before = format_date(before_dt)
 
-    data = get_data_in_range(ticker, before, curr_date, "insider_trans", DATA_DIR)
+    data_dir = get_data_dir()
+    data = get_data_in_range(ticker, before, curr_date, "insider_trans", data_dir)
 
     if len(data) == 0:
         return ""
@@ -149,8 +184,9 @@ def get_simfin_balance_sheet(
     ],
     curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
 ):
-    data_path = os.path.join(
-        DATA_DIR,
+    data_dir = get_data_dir()
+    data_path = safe_path_join(
+        data_dir,
         "fundamental_data",
         "simfin_data_all",
         "balance_sheet",
@@ -196,8 +232,9 @@ def get_simfin_cashflow(
     ],
     curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
 ):
-    data_path = os.path.join(
-        DATA_DIR,
+    data_dir = get_data_dir()
+    data_path = safe_path_join(
+        data_dir,
         "fundamental_data",
         "simfin_data_all",
         "cash_flow",
@@ -243,8 +280,9 @@ def get_simfin_income_statements(
     ],
     curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
 ):
-    data_path = os.path.join(
-        DATA_DIR,
+    data_dir = get_data_dir()
+    data_path = safe_path_join(
+        data_dir,
         "fundamental_data",
         "simfin_data_all",
         "income_statements",
@@ -289,9 +327,9 @@ def get_google_news(
 ) -> str:
     query = query.replace(" ", "+")
 
-    start_date = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
+    before_dt = subtract_days(curr_date_dt, look_back_days)
+    before = format_date(before_dt)
 
     news_results = getNewsData(query, before, curr_date)
 
@@ -322,27 +360,27 @@ def get_reddit_global_news(
         str: A formatted dataframe containing the latest news articles posts on reddit and meta information in these columns: "created_utc", "id", "title", "selftext", "score", "num_comments", "url"
     """
 
-    start_date = datetime.strptime(start_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    start_date_dt = parse_date(start_date)
+    before_dt = subtract_days(start_date_dt, look_back_days)
+    before = format_date(before_dt)
 
     posts = []
     # iterate from start_date to end_date
-    curr_date = datetime.strptime(before, "%Y-%m-%d")
+    curr_date_dt = before_dt
 
-    total_iterations = (start_date - curr_date).days + 1
-    pbar = tqdm(desc=f"Getting Global News on {start_date}", total=total_iterations)
+    total_iterations = (start_date_dt - curr_date_dt).days + 1
+    pbar = tqdm(desc=f"Getting Global News on {format_date(start_date_dt)}", total=total_iterations)
 
-    while curr_date <= start_date:
-        curr_date_str = curr_date.strftime("%Y-%m-%d")
+    while curr_date_dt <= start_date_dt:
+        curr_date_str = format_date(curr_date_dt)
         fetch_result = fetch_top_from_category(
             "global_news",
             curr_date_str,
             max_limit_per_day,
-            data_path=os.path.join(DATA_DIR, "reddit_data"),
+            data_path=safe_path_join(get_data_dir(), "reddit_data"),
         )
         posts.extend(fetch_result)
-        curr_date += relativedelta(days=1)
+        curr_date_dt += relativedelta(days=1)
         pbar.update(1)
 
     pbar.close()
@@ -357,7 +395,7 @@ def get_reddit_global_news(
         else:
             news_str += f"### {post['title']}\n\n{post['content']}\n\n"
 
-    return f"## Global News Reddit, from {before} to {curr_date}:\n{news_str}"
+    return f"## Global News Reddit, from {before} to {format_date(curr_date_dt)}:\n{news_str}"
 
 
 def get_reddit_company_news(
@@ -376,31 +414,31 @@ def get_reddit_company_news(
         str: A formatted dataframe containing the latest news articles posts on reddit and meta information in these columns: "created_utc", "id", "title", "selftext", "score", "num_comments", "url"
     """
 
-    start_date = datetime.strptime(start_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    start_date_dt = parse_date(start_date)
+    before_dt = subtract_days(start_date_dt, look_back_days)
+    before = format_date(before_dt)
 
     posts = []
     # iterate from start_date to end_date
-    curr_date = datetime.strptime(before, "%Y-%m-%d")
+    curr_date_dt = before_dt
 
-    total_iterations = (start_date - curr_date).days + 1
+    total_iterations = (start_date_dt - curr_date_dt).days + 1
     pbar = tqdm(
-        desc=f"Getting Company News for {ticker} on {start_date}",
+        desc=f"Getting Company News for {ticker} on {format_date(start_date_dt)}",
         total=total_iterations,
     )
 
-    while curr_date <= start_date:
-        curr_date_str = curr_date.strftime("%Y-%m-%d")
+    while curr_date_dt <= start_date_dt:
+        curr_date_str = format_date(curr_date_dt)
         fetch_result = fetch_top_from_category(
             "company_news",
             curr_date_str,
             max_limit_per_day,
             ticker,
-            data_path=os.path.join(DATA_DIR, "reddit_data"),
+            data_path=safe_path_join(get_data_dir(), "reddit_data"),
         )
         posts.extend(fetch_result)
-        curr_date += relativedelta(days=1)
+        curr_date_dt += relativedelta(days=1)
 
         pbar.update(1)
 
@@ -416,7 +454,7 @@ def get_reddit_company_news(
         else:
             news_str += f"### {post['title']}\n\n{post['content']}\n\n"
 
-    return f"##{ticker} News Reddit, from {before} to {curr_date}:\n\n{news_str}"
+    return f"##{ticker} News Reddit, from {before} to {format_date(curr_date_dt)}:\n\n{news_str}"
 
 
 def get_stock_stats_indicators_window(
@@ -508,45 +546,47 @@ def get_stock_stats_indicators_window(
         )
 
     end_date = curr_date
-    curr_date = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = curr_date - relativedelta(days=look_back_days)
+    curr_date_dt = parse_date(curr_date)
+    before_dt = subtract_days(curr_date_dt, look_back_days)
 
     if not online:
         # read from YFin data
-        data = pd.read_csv(
-            os.path.join(
-                DATA_DIR,
-                f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
-            )
+        data_dir = get_data_dir()
+        data_path = safe_path_join(
+            data_dir,
+            f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
         )
+        data = pd.read_csv(data_path)
         data["Date"] = pd.to_datetime(data["Date"], utc=True)
         dates_in_df = data["Date"].astype(str).str[:10]
 
         ind_string = ""
-        while curr_date >= before:
+        while curr_date_dt >= before_dt:
             # only do the trading dates
-            if curr_date.strftime("%Y-%m-%d") in dates_in_df.values:
+            curr_date_str = format_date(curr_date_dt)
+            if curr_date_str in dates_in_df.values:
                 indicator_value = get_stockstats_indicator(
-                    symbol, indicator, curr_date.strftime("%Y-%m-%d"), online
+                    symbol, indicator, curr_date_str, online
                 )
 
-                ind_string += f"{curr_date.strftime('%Y-%m-%d')}: {indicator_value}\n"
+                ind_string += f"{curr_date_str}: {indicator_value}\n"
 
-            curr_date = curr_date - relativedelta(days=1)
+            curr_date_dt = curr_date_dt - relativedelta(days=1)
     else:
         # online gathering
         ind_string = ""
-        while curr_date >= before:
+        while curr_date_dt >= before_dt:
+            curr_date_str = format_date(curr_date_dt)
             indicator_value = get_stockstats_indicator(
-                symbol, indicator, curr_date.strftime("%Y-%m-%d"), online
+                symbol, indicator, curr_date_str, online
             )
 
-            ind_string += f"{curr_date.strftime('%Y-%m-%d')}: {indicator_value}\n"
+            ind_string += f"{curr_date_str}: {indicator_value}\n"
 
-            curr_date = curr_date - relativedelta(days=1)
+            curr_date_dt = curr_date_dt - relativedelta(days=1)
 
     result_str = (
-        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {end_date}:\n\n"
+        f"## {indicator} values from {format_date(before_dt)} to {end_date}:\n\n"
         + ind_string
         + "\n\n"
         + best_ind_params.get(indicator, "No description available.")
@@ -564,15 +604,15 @@ def get_stockstats_indicator(
     online: Annotated[bool, "to fetch data online or offline"],
 ) -> str:
 
-    curr_date = datetime.strptime(curr_date, "%Y-%m-%d")
-    curr_date = curr_date.strftime("%Y-%m-%d")
+    # Ensure curr_date is in correct string format
+    curr_date = ensure_string(curr_date)
 
     try:
         indicator_value = StockstatsUtils.get_stock_stats(
             symbol,
             indicator,
             curr_date,
-            os.path.join(DATA_DIR, "market_data", "price_data"),
+            safe_path_join(get_data_dir(), "market_data", "price_data"),
             online=online,
         )
     except Exception as e:
@@ -590,17 +630,17 @@ def get_YFin_data_window(
     look_back_days: Annotated[int, "how many days to look back"],
 ) -> str:
     # calculate past days
-    date_obj = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = date_obj - relativedelta(days=look_back_days)
-    start_date = before.strftime("%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
+    before_dt = subtract_days(curr_date_dt, look_back_days)
+    start_date = format_date(before_dt)
 
     # read in data
-    data = pd.read_csv(
-        os.path.join(
-            DATA_DIR,
-            f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
-        )
+    data_dir = get_data_dir()
+    data_path = safe_path_join(
+        data_dir,
+        f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
     )
+    data = pd.read_csv(data_path)
 
     # Extract just the date part for comparison
     data["DateOnly"] = data["Date"].str[:10]
@@ -631,8 +671,9 @@ def get_YFin_data_online(
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
 ):
 
-    datetime.strptime(start_date, "%Y-%m-%d")
-    datetime.strptime(end_date, "%Y-%m-%d")
+    # Validate date formats
+    start_date_dt = parse_date(start_date)
+    end_date_dt = parse_date(end_date)
 
     # Create ticker object
     ticker = yf.Ticker(symbol.upper())
@@ -662,7 +703,7 @@ def get_YFin_data_online(
     # Add header information
     header = f"# Stock data for {symbol.upper()} from {start_date} to {end_date}\n"
     header += f"# Total records: {len(data)}\n"
-    header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    header += f"# Data retrieved on: {format_date(datetime.now(), '%Y-%m-%d %H:%M:%S')}\n\n"
 
     return header + csv_string
 
@@ -671,14 +712,14 @@ def get_YFin_data(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
-) -> str:
+) -> pd.DataFrame:
     # read in data
-    data = pd.read_csv(
-        os.path.join(
-            DATA_DIR,
-            f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
-        )
+    data_dir = get_data_dir()
+    data_path = safe_path_join(
+        data_dir,
+        f"market_data/price_data/{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
     )
+    data = pd.read_csv(data_path)
 
     if end_date > "2025-03-25":
         raise Exception(
@@ -702,106 +743,156 @@ def get_YFin_data(
     return filtered_data
 
 
-def get_stock_news_openai(ticker, curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
+def get_stock_news_openai(
+    ticker: Annotated[str, "ticker symbol"],
+    curr_date: Annotated[str, "current date in yyyy-mm-dd format"]
+) -> str:
+    """Get stock news from OpenAI API with type-safe response handling."""
+    try:
+        config = get_config()
+        client = OpenAI(base_url=config["backend_url"])
 
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Social Media for {ticker} from 7 days before {curr_date} to {curr_date}? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
-    )
+        response = client.responses.create(
+            model=config["quick_think_llm"],
+            input=[
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"Can you search Social Media for {ticker} from 7 days before {curr_date} to {curr_date}? Make sure you only get the data posted during that period.",
+                        }
+                    ],
+                }
+            ],
+            text={"format": {"type": "text"}},
+            reasoning={},
+            tools=[
+                {
+                    "type": "web_search_preview",
+                    "user_location": {"type": "approximate"},
+                    "search_context_size": "low",
+                }
+            ],
+            temperature=1,
+            max_output_tokens=4096,
+            top_p=1,
+            store=True,
+        )
 
-    return response.output[1].content[0].text
-
-
-def get_global_news_openai(curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
-
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search global or macroeconomics news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
-    )
-
-    return response.output[1].content[0].text
+        # Safe extraction of response content
+        if hasattr(response, 'output') and response.output and len(response.output) > 1:
+            output_item = response.output[1]
+            if hasattr(output_item, 'content') and output_item.content and len(output_item.content) > 0:
+                content_item = output_item.content[0]
+                if hasattr(content_item, 'text'):
+                    return str(content_item.text)
+        
+        return "Unable to retrieve stock news data"
+    
+    except Exception as e:
+        print(f"Error retrieving stock news for {ticker}: {e}")
+        return ""
 
 
-def get_fundamentals_openai(ticker, curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
+def get_global_news_openai(
+    curr_date: Annotated[str, "current date in yyyy-mm-dd format"]
+) -> str:
+    """Get global news from OpenAI API with type-safe response handling."""
+    try:
+        config = get_config()
+        client = OpenAI(base_url=config["backend_url"])
 
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Fundamental for discussions on {ticker} during of the month before {curr_date} to the month of {curr_date}. Make sure you only get the data posted during that period. List as a table, with PE/PS/Cash flow/ etc",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
-    )
+        response = client.responses.create(
+            model=config["quick_think_llm"],
+            input=[
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"Can you search global or macroeconomics news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes? Make sure you only get the data posted during that period.",
+                        }
+                    ],
+                }
+            ],
+            text={"format": {"type": "text"}},
+            reasoning={},
+            tools=[
+                {
+                    "type": "web_search_preview",
+                    "user_location": {"type": "approximate"},
+                    "search_context_size": "low",
+                }
+            ],
+            temperature=1,
+            max_output_tokens=4096,
+            top_p=1,
+            store=True,
+        )
 
-    return response.output[1].content[0].text
+        # Safe extraction of response content
+        if hasattr(response, 'output') and response.output and len(response.output) > 1:
+            output_item = response.output[1]
+            if hasattr(output_item, 'content') and output_item.content and len(output_item.content) > 0:
+                content_item = output_item.content[0]
+                if hasattr(content_item, 'text'):
+                    return str(content_item.text)
+        
+        return "Unable to retrieve global news data"
+    
+    except Exception as e:
+        print(f"Error retrieving global news: {e}")
+        return ""
+
+
+def get_fundamentals_openai(
+    ticker: Annotated[str, "ticker symbol"],
+    curr_date: Annotated[str, "current date in yyyy-mm-dd format"]
+) -> str:
+    """Get fundamentals data from OpenAI API with type-safe response handling."""
+    try:
+        config = get_config()
+        client = OpenAI(base_url=config["backend_url"])
+
+        response = client.responses.create(
+            model=config["quick_think_llm"],
+            input=[
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"Can you search Fundamental for discussions on {ticker} during of the month before {curr_date} to the month of {curr_date}. Make sure you only get the data posted during that period. List as a table, with PE/PS/Cash flow/ etc",
+                        }
+                    ],
+                }
+            ],
+            text={"format": {"type": "text"}},
+            reasoning={},
+            tools=[
+                {
+                    "type": "web_search_preview",
+                    "user_location": {"type": "approximate"},
+                    "search_context_size": "low",
+                }
+            ],
+            temperature=1,
+            max_output_tokens=4096,
+            top_p=1,
+            store=True,
+        )
+
+        # Safe extraction of response content
+        if hasattr(response, 'output') and response.output and len(response.output) > 1:
+            output_item = response.output[1]
+            if hasattr(output_item, 'content') and output_item.content and len(output_item.content) > 0:
+                content_item = output_item.content[0]
+                if hasattr(content_item, 'text'):
+                    return str(content_item.text)
+        
+        return "Unable to retrieve fundamentals data"
+    
+    except Exception as e:
+        print(f"Error retrieving fundamentals for {ticker}: {e}")
+        return ""
