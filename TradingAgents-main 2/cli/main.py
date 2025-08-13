@@ -22,6 +22,7 @@ from tradingagents.utils.message_utils import has_tool_calls
 from rich.rule import Rule
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents import load_config, validate_api_keys
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
@@ -709,11 +710,27 @@ def extract_content_string(content):
         return str(content)
 
 def run_analysis():
-    # First get all user selections
+    # APIキーの検証と.envファイルの読み込み
+    console.print("[bold blue]🔑 APIキーを確認中...[/bold blue]")
+    if not validate_api_keys():
+        console.print("[bold red]❗ APIキーが不足しています。アプリケーションを終了します。[/bold red]")
+        console.print("[bold yellow]プロジェクトルートに .env ファイルを作成し、.env.example を参考に設定してください。[/bold yellow]")
+        return
+    
+    console.print("[bold green]✅ APIキーの確認が完了しました。[/bold green]\n")
+    
+    # ユーザー選択を取得
     selections = get_user_selections()
 
-    # Create config with selected research depth
-    config = DEFAULT_CONFIG.copy()
+    # 設定をロード（APIキー検証は上で完了済みなのでスキップ）
+    try:
+        config = load_config(validate_keys=False)
+    except Exception as e:
+        console.print(f"[bold red]❗ 設定の読み込みに失敗しました: {e}[/bold red]")
+        console.print("[bold yellow]フォールバックでデフォルト設定を使用します...[/bold yellow]")
+        config = DEFAULT_CONFIG.copy()
+
+    # 選択されたリサーチ深度で設定をカスタマイズ
     config["max_debate_rounds"] = selections["research_depth"]
     config["max_risk_discuss_rounds"] = selections["research_depth"]
     config["quick_think_llm"] = selections["shallow_thinker"]
