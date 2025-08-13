@@ -48,8 +48,8 @@ TradingAgentsは、実世界のトレーディング会社のダイナミクス�
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/your-username/TradingAgents.git
-cd TradingAgents
+git clone https://github.com/career091101/TA9.git
+cd TA9
 
 # 仮想環境の作成
 conda create -n tradingagents python=3.13
@@ -62,13 +62,13 @@ pip install -r requirements.txt
 ### 環境変数の設定
 
 ```bash
-# 必須API キー
-export FINNHUB_API_KEY=your_finnhub_api_key
-export OPENAI_API_KEY=your_openai_api_key
+# 必須APIキー
+export FINNHUB_API_KEY=$YOUR_FINNHUB_API_KEY  # 金融データ取得に必要
+export OPENAI_API_KEY=$YOUR_OPENAI_API_KEY    # LLMエージェントに必要
 
 # オプション（追加機能用）
-export ANTHROPIC_API_KEY=your_anthropic_api_key
-export GOOGLE_API_KEY=your_google_api_key
+export ANTHROPIC_API_KEY=$YOUR_ANTHROPIC_API_KEY
+export GOOGLE_API_KEY=$YOUR_GOOGLE_API_KEY
 ```
 
 ### 実行方法
@@ -222,9 +222,9 @@ black tradingagents/
 
 質問やサポートが必要な場合：
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/TradingAgents/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/TradingAgents/discussions)
-- **Documentation**: [プロジェクトWiki](https://github.com/your-username/TradingAgents/wiki)
+- **Issues**: [GitHub Issues](https://github.com/career091101/TA9/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/career091101/TA9/discussions)
+- **Documentation**: [プロジェクトWiki](https://github.com/career091101/TA9/wiki)
 
 ---
 
