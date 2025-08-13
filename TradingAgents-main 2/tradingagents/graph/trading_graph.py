@@ -11,6 +11,9 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
 
+# APIキー管理の追加
+from tradingagents.api_keys import APIKeyManager
+
 # 統一されたLLM型定義
 LLMType = Union[ChatOpenAI, ChatAnthropic, ChatGoogleGenerativeAI]
 
@@ -62,27 +65,58 @@ class TradingAgentsGraph:
             exist_ok=True,
         )
 
-        # Initialize LLMs with proper typing
+        # Initialize API key manager to ensure correct API keys are loaded
+        api_manager = APIKeyManager()
+        
+        # Initialize LLMs with proper typing and explicit API keys
         self.deep_thinking_llm: LLMType
         self.quick_thinking_llm: LLMType
         
         if self.config["llm_provider"].lower() == "openai" or self.config["llm_provider"] == "ollama" or self.config["llm_provider"] == "openrouter":
-            self.deep_thinking_llm = ChatOpenAI(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatOpenAI(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
+            openai_api_key = api_manager.get_api_key("OPENAI_API_KEY")
+            if not openai_api_key:
+                raise ValueError("OPENAI_API_KEY is required for OpenAI provider but not found")
+            
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"], 
+                base_url=self.config["backend_url"],
+                api_key=openai_api_key
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"], 
+                base_url=self.config["backend_url"],
+                api_key=openai_api_key
+            )
         elif self.config["llm_provider"].lower() == "anthropic":
+            anthropic_api_key = api_manager.get_api_key("ANTHROPIC_API_KEY")
+            if not anthropic_api_key:
+                raise ValueError("ANTHROPIC_API_KEY is required for Anthropic provider but not found")
+                
             self.deep_thinking_llm = ChatAnthropic(
                 model_name=self.config["deep_think_llm"],
                 timeout=60.0,
-                stop=None
+                stop=None,
+                api_key=anthropic_api_key
             )
             self.quick_thinking_llm = ChatAnthropic(
                 model_name=self.config["quick_think_llm"],
                 timeout=60.0,
-                stop=None
+                stop=None,
+                api_key=anthropic_api_key
             )
         elif self.config["llm_provider"].lower() == "google":
-            self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
-            self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
+            google_api_key = api_manager.get_api_key("GOOGLE_API_KEY")
+            if not google_api_key:
+                raise ValueError("GOOGLE_API_KEY is required for Google provider but not found")
+                
+            self.deep_thinking_llm = ChatGoogleGenerativeAI(
+                model=self.config["deep_think_llm"],
+                google_api_key=google_api_key
+            )
+            self.quick_thinking_llm = ChatGoogleGenerativeAI(
+                model=self.config["quick_think_llm"],
+                google_api_key=google_api_key
+            )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
         
